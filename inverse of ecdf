@@ -1,0 +1,125 @@
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import os
+# from statsmodels.distributions.empirical_distribution import ECDF
+
+### General steps
+
+
+## import data from excel
+
+# set path to excel file
+path=r"C:\Users\..."
+
+# set pame of excel file
+file="file.xlsx"
+
+# read excel file
+data=pd.read_excel(path+os.sep+file)
+
+# delete path and file name to free up memory
+del path,file
+
+
+## create a table out of imported data to make data easier accessible
+data=pd.DataFrame({"Date":data["Dates"], "Gold":data["Gold USD/Oz"],\
+                   "10 yr. Bond":data["Bond Price, T=10 years, N=1000 USD"],\
+                    "30 yr. Bond":data["Bond Price, T=30 years, N=1000 USD"]})  
+    
+## calculate loss of portfolio
+
+#calculate loss of gold
+loss_gold=(data["Gold"]-data["Gold"].shift(periods=1))*-1
+
+# drop na of first period (na because nothing to subtract from)
+loss_gold=loss_gold.dropna()
+
+#calculate loss of bond T=10
+loss_bonds_T10=(data["10 yr. Bond"]-data["10 yr. Bond"].shift(periods=1))*-1
+
+# drop na of first period (na because nothing to subtract from)
+loss_bonds_T10=loss_bonds_T10.dropna()
+
+
+
+# ask how many units of gold user possesses
+x=int(input("how many units of gold do you currently possess: \n"))
+
+# ask how many units of bond user possesses
+y=int(input("how many units of 10 yr. bonds do you currently possess: \n"))
+
+# portfolio loss with 2 units of gold and 3 units of bonds
+loss=x*loss_gold+y*loss_bonds_T10
+
+# print out loss so user can double check
+print("the losses per period: ")
+print (loss)
+
+# delete loss bonds, loss gold and general table to free up memory
+del loss_bonds_T10,loss_gold,data,x,y
+
+
+## calculate cdf of loss
+
+# create a copy of losses to not alter original data 
+loss_2=np.copy(loss)
+
+# sort matrix to create cdf function
+loss_2=np.sort(loss_2)
+
+# calculate relative density for each loss
+loss_2=abs(loss_2)/np.sum(abs(loss_2))
+
+# cumulate the relative density to calculate cumulative density
+# (cumulative values as y value) 
+dist=np.cumsum(loss_2)
+
+# delete relative density to free up memory
+del loss_2
+
+## create random uniform values
+
+# define samplesize
+m=int(input("how big should each subsample be?: \n"))
+
+# define amount of samples
+n=int(input("how many subsamples would you like to calculate? \n"))
+
+# create random uniform values with values between 0 and 1
+# create n*m matrix with random values
+# n+1 and m+1 respectively as last number is not considered
+U=np.random.uniform(0,1,[n+1,m+1])
+
+
+## interpolate values where x ist the cumulative density, y is loss
+## and U is the random input which should be interpolated 
+inv=np.interp(U,dist,loss)
+
+# delete U loss and cdf values as well as subsample indices to free up memory
+del U,dist,loss,m,n
+
+## compute var
+
+# get 95% quantile for each subsample with intepolated numbers 
+# -> 95% VaR for each subsample
+inv_quant=np.quantile(inv,0.95,axis=1)
+
+# delete matrix with interpolated numbers to save up memory
+del inv
+
+# create distribution function of 95% VaR
+inv_var_fun=plt.hist(inv_quant,density=True)
+
+# calculate average VaR of subsamples-> calculate VaR
+inv_avg=inv_quant.mean()
+
+# calculate upper bound of confidence interval
+inv_upper=np.quantile(inv_quant,0.95)
+
+# calculate lower bound of confidence interval
+inv_lower=np.quantile(inv_quant,0.05)
+
+# delete array with quantile values to free up memory
+del inv_quant
